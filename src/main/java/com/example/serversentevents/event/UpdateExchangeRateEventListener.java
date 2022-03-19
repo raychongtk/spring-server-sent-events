@@ -2,31 +2,23 @@ package com.example.serversentevents.event;
 
 import com.example.serversentevents.apipayload.ExchangeRates;
 import org.springframework.context.ApplicationListener;
-import org.springframework.integration.dsl.MessageChannels;
-import org.springframework.messaging.MessageHandler;
-import org.springframework.messaging.SubscribableChannel;
-import org.springframework.messaging.support.GenericMessage;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.FluxSink;
+import reactor.core.publisher.Sinks;
 
 /**
  * @author raychong
  */
 @Component
 public class UpdateExchangeRateEventListener implements ApplicationListener<UpdateExchangeRateEvent> {
-    private final SubscribableChannel subscribableChannel = MessageChannels.publishSubscribe().get();
+    private final Sinks.Many<UpdateExchangeRateEvent> sink = Sinks.many().multicast().onBackpressureBuffer();
 
     public Flux<ExchangeRates> createLatestExchangeRates() {
-        return Flux.create(sink -> {
-            MessageHandler handler = message -> sink.next(((UpdateExchangeRateEvent) message.getPayload()).getExchangeRates());
-            sink.onCancel(() -> subscribableChannel.unsubscribe(handler));
-            subscribableChannel.subscribe(handler);
-        }, FluxSink.OverflowStrategy.LATEST);
+        return sink.asFlux().map(UpdateExchangeRateEvent::getExchangeRates);
     }
 
     @Override
     public void onApplicationEvent(UpdateExchangeRateEvent event) {
-        subscribableChannel.send(new GenericMessage<>(event));
+        sink.tryEmitNext(event);
     }
 }
